@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<!-- DEPLOYMENT
+  Deploy on GitHub Pages:
+  1. Upload all three files (index.html, styles.css, app.js) to the repo root
+  2. Settings → Pages → Source → main branch / root
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contract Review — IDappcom Legal Tool</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&family=Geist:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js"></script>
+<script>
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
+  }
+</script>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    Contract Review
+  </div>
+  <div class="header-tag">Licensing &amp; Services · IDappcom</div>
+</header>
+
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+
+    <div class="sidebar-section">
+      <h3>API Key</h3>
+      <div class="api-input-wrap">
+        <input type="password" id="api-key" placeholder="sk-ant-..." autocomplete="off">
+      </div>
+      <p class="api-hint">
+        Get your key at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> → API Keys. Never shared or stored beyond this session.
+      </p>
+    </div>
+
+    <div class="sidebar-section">
+      <h3>Contract Type</h3>
+      <select id="contract-type">
+        <option value="licensing">Licensing &amp; Services Agreement</option>
+        <option value="commercial">Commercial / Supply Agreement</option>
+        <option value="employment">Employment Contract</option>
+        <option value="nda">Non-Disclosure Agreement</option>
+        <option value="shareholders">Shareholders Agreement</option>
+        <option value="general">General Commercial Contract</option>
+      </select>
+    </div>
+
+    <div class="sidebar-section">
+      <h3>Input Method</h3>
+      <div class="tab-row" style="margin-bottom:10px;">
+        <button class="tab-btn active" onclick="switchTab('paste')">Paste Text</button>
+        <button class="tab-btn" onclick="switchTab('upload')">Upload File</button>
+      </div>
+      <div id="paste-panel">
+        <textarea id="contract-text" placeholder="Paste the contract text here…" rows="10"></textarea>
+      </div>
+      <div id="upload-panel" style="display:none;">
+        <div class="drop-zone" id="drop-zone"
+          onclick="document.getElementById('file-input').click()"
+          ondragover="handleDragOver(event)"
+          ondragleave="handleDragLeave(event)"
+          ondrop="handleDrop(event)">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="12" y1="18" x2="12" y2="12"/>
+            <line x1="9" y1="15" x2="15" y2="15"/>
+          </svg>
+          <p id="drop-label">Drop a file here</p>
+          <span id="drop-sub">PDF, Word, or plain text</span>
+        </div>
+        <input type="file" id="file-input" accept=".pdf,.doc,.docx,.txt" onchange="handleFileSelect(event)">
+      </div>
+    </div>
+
+    <button class="analyse-btn" id="analyse-btn" onclick="analyseContract()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      Analyse Contract
+    </button>
+
+  </aside>
+
+  <!-- Main Panel -->
+  <main class="main" id="main-panel">
+
+    <!-- Empty state -->
+    <div class="empty-state" id="empty-state">
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+        <polyline points="10 9 9 9 8 9"/>
+      </svg>
+      <h2>Ready to review</h2>
+      <p>Enter your API key, select a contract type, paste or upload your contract, then click Analyse.</p>
+    </div>
+
+    <!-- Loading state -->
+    <div class="loading-state" id="loading-state" style="display:none;">
+      <div class="spinner"></div>
+      <p id="loading-msg">Reading the contract…</p>
+    </div>
+
+    <!-- Error state -->
+    <div id="error-state" style="display:none;">
+      <div class="error-card" id="error-msg"></div>
+      <button class="reset-btn" onclick="resetTool()">← Start over</button>
+    </div>
+
+    <!-- Results -->
+    <div id="results-state" style="display:none;">
+
+      <div class="results-header" id="results-header">
+        <div class="results-title">
+          <h2>Analysis Complete</h2>
+          <p id="results-meta">— —</p>
+        </div>
+        <div>
+          <button class="reset-btn" onclick="resetTool()">← New contract</button>
+          <button class="export-btn" id="export-btn" onclick="exportPDF()">Download PDF</button>
+        </div>
+      </div>
+
+      <!-- View tabs -->
+      <div class="view-tabs">
+        <button class="view-tab active" data-view="summary" onclick="switchView('summary')">
+          Executive Summary
+        </button>
+        <button class="view-tab" data-view="clauses" onclick="switchView('clauses')">
+          Clause-by-Clause <span class="view-tab-count" id="clause-count">0</span>
+        </button>
+      </div>
+
+      <!-- Summary view -->
+      <div id="summary-view">
+        <div class="summary-block">
+          <h3>Plain English Overview</h3>
+          <p id="summary-text"></p>
+        </div>
+
+        <div class="risk-summary" id="risk-summary"></div>
+
+        <div class="section-label">Risk Flags</div>
+        <div class="risk-grid" id="risk-grid"></div>
+      </div>
+
+      <!-- Clause view -->
+      <div id="clauses-view" style="display:none;">
+        <h3 class="print-section-title">Clause-by-Clause Analysis</h3>
+        <div class="clause-toolbar">
+          <span class="toolbar-label">Filter</span>
+          <button class="filter-chip active" data-filter="all" onclick="filterClauses('all')">All</button>
+          <button class="filter-chip" data-filter="critical" onclick="filterClauses('critical')">
+            <span class="filter-chip-dot dot-critical"></span>Critical
+          </button>
+          <button class="filter-chip" data-filter="high" onclick="filterClauses('high')">
+            <span class="filter-chip-dot dot-high"></span>High
+          </button>
+          <button class="filter-chip" data-filter="medium" onclick="filterClauses('medium')">
+            <span class="filter-chip-dot dot-medium"></span>Medium
+          </button>
+          <button class="filter-chip" data-filter="low" onclick="filterClauses('low')">
+            <span class="filter-chip-dot dot-low"></span>Low
+          </button>
+          <button class="expand-all-btn" id="expand-all-btn" onclick="toggleAllClauses()">Expand all</button>
+        </div>
+        <div class="clause-list" id="clause-list"></div>
+      </div>
+
+      <hr class="divider">
+
+      <div class="notes-block">
+        <h3>My Observations</h3>
+        <textarea id="notes-field" placeholder="Add your own notes on this contract — clauses to query, points to raise with the client, follow-up actions…"></textarea>
+        <div class="notes-toolbar">
+          <span class="save-confirm" id="save-confirm">Saved</span>
+          <button class="save-btn" onclick="saveNotes()">Save Notes</button>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+</div>
+
+
+<script src="app.js"></script>
+</body>
+</html>
